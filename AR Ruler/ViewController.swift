@@ -14,20 +14,15 @@ class ViewController: UIViewController, ARSCNViewDelegate {
 
     @IBOutlet var sceneView: ARSCNView!
     
+    var dotNodes = [SCNNode]()
+    var textNode = SCNNode()
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
         // Set the view's delegate
-        sceneView.delegate = self
-        
-        // Show statistics such as fps and timing information
-        sceneView.showsStatistics = true
-        
-        // Create a new scene
-        let scene = SCNScene(named: "art.scnassets/ship.scn")!
-        
-        // Set the scene to the view
-        sceneView.scene = scene
+        self.sceneView.delegate = self
+       
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -37,39 +32,72 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         let configuration = ARWorldTrackingConfiguration()
 
         // Run the view's session
-        sceneView.session.run(configuration)
+        self.sceneView.session.run(configuration)
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         
         // Pause the view's session
-        sceneView.session.pause()
+        self.sceneView.session.pause()
     }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        
+        if self.dotNodes.count >= 2 {
+            for dotNode in dotNodes {
+                dotNode.removeFromParentNode()
+            }
+            self.dotNodes.removeAll()
+            self.textNode.removeFromParentNode()
+        }
+        
+        if let touchLocation = touches.first?.location(in: self.sceneView) {
+            let hitTestResults = self.sceneView.hitTest(touchLocation, types: .featurePoint)
+            
+            if let hitResult = hitTestResults.first {
+                addDot(at: hitResult)
+            }
+        }
+        
+    }
+    
+    func addDot(at hitResult:ARHitTestResult) {
+        let dotGeometry = SCNSphere(radius: 0.005)
+        
+        let material = SCNMaterial()
+        material.diffuse.contents = UIColor.red
+        dotGeometry.materials = [material]
+        
+        let dotNode = SCNNode(geometry: dotGeometry)
+        dotNode.position = SCNVector3(hitResult.worldTransform.columns.3.x, hitResult.worldTransform.columns.3.y, hitResult.worldTransform.columns.3.z)
+        
+        self.sceneView.scene.rootNode.addChildNode(dotNode)
+        self.dotNodes.append(dotNode)
+        
+        if dotNodes.count >= 2 {
+            calculateDistance()
+        }
+    }
+    
+    func calculateDistance() {
+        let p1 = dotNodes[0].simdPosition
+        let p2 = dotNodes[1].simdPosition
 
-    // MARK: - ARSCNViewDelegate
-    
-/*
-    // Override to create and configure nodes for anchors added to the view's session.
-    func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-        let node = SCNNode()
-     
-        return node
+        let distance = simd_distance(p1, p2) * 100
+        displayOnScreen(text: String(format: "%.1f cm", distance), position: p2)
     }
-*/
     
-    func session(_ session: ARSession, didFailWithError error: Error) {
-        // Present an error message to the user
+    func displayOnScreen(text: String, position: simd_float3) {
         
-    }
-    
-    func sessionWasInterrupted(_ session: ARSession) {
-        // Inform the user that the session has been interrupted, for example, by presenting an overlay
+        let textGeometry = SCNText(string: text, extrusionDepth: 1.0)
+        textGeometry.firstMaterial?.diffuse.contents = UIColor.red
         
-    }
-    
-    func sessionInterruptionEnded(_ session: ARSession) {
-        // Reset tracking and/or remove existing anchors if consistent tracking is required
+        self.textNode = SCNNode(geometry: textGeometry)
+        self.textNode.simdPosition = simd_float3(position.x, position.y + 0.01, position.z)
+        self.textNode.scale = SCNVector3(0.01, 0.01, 0.01)
+
+        self.sceneView.scene.rootNode.addChildNode(textNode)
         
     }
 }
